@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#243447">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>MAGem — Registro tecnico V0.2</title>
+<style>
+:root{font-family:Arial,sans-serif;color:#222;background:#f4f5f7}
+*{box-sizing:border-box}body{margin:0}
+header{background:#243447;color:#fff;padding:17px 20px}
+header h1{margin:0;font-size:21px}header small{opacity:.8}
+nav{display:flex;gap:7px;flex-wrap:wrap;padding:11px;background:#fff;border-bottom:1px solid #ddd}
+button{border:1px solid #b8bec5;background:#fff;border-radius:7px;padding:9px 12px;font-size:14px;cursor:pointer}
+button.primary{background:#243447;color:#fff;border-color:#243447}
+button.danger{color:#a11}
+main{max-width:1080px;margin:18px auto;padding:0 13px}
+.view{display:none}.view.active{display:block}
+h2{font-size:19px;margin:7px 0 13px}
+.section{background:#fff;border:1px solid #d9dde1;border-radius:10px;padding:15px;margin-bottom:13px}
+.label{font-size:11px;font-weight:bold;text-transform:uppercase;color:#68717a;margin-bottom:5px}
+.state{line-height:1.5;white-space:pre-wrap}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:11px}
+.card{background:#fff;border:1px solid #d9dde1;border-radius:10px;padding:14px;cursor:pointer}
+.card:hover{border-color:#6d7b89}
+.meta{font-size:11px;color:#68717a;margin-bottom:6px}.card h3{font-size:16px;margin:3px 0 7px}
+table{width:100%;border-collapse:collapse;background:#fff}
+th,td{text-align:left;padding:9px;border-bottom:1px solid #ddd;vertical-align:top;font-size:14px}
+th{font-size:11px;text-transform:uppercase;color:#68717a}
+input,textarea,select{width:100%;padding:9px;border:1px solid #b9bec4;border-radius:7px;font:inherit}
+textarea{min-height:80px;resize:vertical}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.full{grid-column:1/-1}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}
+.back{margin-bottom:10px}.status{font-size:12px;color:#566;min-height:17px}
+.search{margin:10px 0}
+.note{background:#fafafa;border-left:3px solid #9aa4ad;padding:10px;white-space:pre-wrap;line-height:1.5}
+@media(max-width:700px){.grid{grid-template-columns:1fr}th:nth-child(3),td:nth-child(3){display:none}}
+</style>
+</head>
+<body>
+<header><h1>MAGem — Registro tecnico</h1><small>V0.7 sperimentale · IndexedDB · storico Erica e Miriam caricato</small></header>
+<nav>
+<button onclick="show('athletes')">Home</button>
+<button onclick="manageAthletes()">Gestione atleti</button>
+<button class="primary" onclick="newSession()">+ Nuova sessione</button>
+<button onclick="exportDB()">Esporta backup</button>
+<button onclick="document.getElementById('importFile').click()">Importa backup</button>
+<input id="importFile" type="file" accept=".json,application/json" hidden onchange="importDB(event)">
+</nav>
+<main>
+<section id="athletes" class="view active">
+<h2>Atleti</h2><div class="status" id="dbStatus">Apertura archivio…</div>
+<div class="cards" id="athleteCards"></div>
+</section>
+
+<section id="manageAthletes" class="view">
+<button class="back" onclick="show('athletes')">← Home</button>
+<h2>Gestione atleti</h2>
+<div class="section">
+<div class="label">Nuovo atleta</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<input id="newAthleteName" placeholder="Nome atleta" style="flex:1;min-width:180px">
+<button class="primary" onclick="addAthlete()">+ Aggiungi atleta</button>
+</div>
+</div>
+<div class="section">
+<div class="label">Atleti presenti nell'archivio</div>
+<div id="athleteManagementList"></div>
+</div>
+</section>
+
+<section id="athlete" class="view">
+<h2 id="athleteName"></h2>
+<div class="section"><div class="label">Stato attuale</div><div id="state" class="state"></div></div>
+<div class="section"><div class="label">Temi / questioni aperte</div><div id="themes" class="state"></div></div>
+<div class="section"><div class="label">Storia e fenomeno seguito</div><div id="history" class="state"></div></div>
+<div class="section" id="evidenceBox"><div class="label">Evidenze / note recenti</div><div id="evidence" class="state"></div></div>
+<div class="section">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+<h2 style="margin:0">Sessioni / interventi</h2><button class="primary" onclick="newSession()">+ Nuova sessione</button>
+</div>
+<input class="search" id="sessionSearch" placeholder="Cerca nelle sessioni…" oninput="renderSessions()">
+<div id="sessionList"></div>
+</div>
+</section>
+
+<section id="session" class="view">
+<button class="back" onclick="backToAthlete()">← Torna all'atleta</button>
+<h2 id="formTitle">Nuova sessione</h2>
+<div class="section" style="background:#f8fafb">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <button type="button" class="primary" id="voiceButton" onclick="toggleVoice()">🎙️ Parla</button>
+    <span id="voiceStatus" class="status">Pronuncia il nome del campo, per esempio: «Osservazione: ...»</span>
+  </div>
+</div>
+<div class="section"><div class="grid">
+<div><div class="label">Atleta</div><select id="fAthlete"><option>Miriam</option><option>Erica</option></select></div>
+<div><div class="label">Data / periodo</div><input id="fDate"></div>
+<div class="full"><div class="label">Tema principale</div><input id="fTheme"></div>
+<div class="full"><div class="label">Contesto / condizioni</div><textarea id="fContext"></textarea></div>
+<div class="full"><div class="label">Intervento</div><textarea id="fIntervention"></textarea></div>
+<div class="full"><div class="label">Obiettivo</div><textarea id="fObjective"></textarea></div>
+<div class="full"><div class="label">Osservazioni</div><textarea id="fObservation"></textarea></div>
+<div class="full"><div class="label">Interpretazioni</div><textarea id="fInterpretation"></textarea></div>
+<div class="full"><div class="label">Ipotesi</div><textarea id="fHypothesis"></textarea></div>
+<div class="full"><div class="label">Esito / stato</div><textarea id="fOutcome"></textarea></div>
+<div class="full"><div class="label">Da verificare</div><textarea id="fVerify"></textarea></div>
+<div class="full"><div class="label">Filmati / materiali</div><textarea id="fVideos"></textarea></div>
+</div>
+<div class="actions"><button class="primary" onclick="saveSession()">Salva sessione</button><button onclick="backToAthlete()">Annulla</button></div>
+</div>
+</section>
+
+<section id="detail" class="view">
+<div class="actions" style="justify-content:space-between;margin-top:0;margin-bottom:12px">
+<button class="back" onclick="backToAthlete()" style="margin:0">← Torna all'Atleta</button>
+<div style="display:flex;gap:8px">
+<button class="primary" id="topEditButton" onclick="editSession(currentDetailId)">Modifica</button>
+<button class="danger" id="topDeleteButton" onclick="deleteSession(currentDetailId)">Elimina</button>
+</div>
+</div>
+<h2 id="detailTitle"></h2><div id="detailBody"></div>
+<div class="actions" style="justify-content:space-between;margin-top:16px">
+<button class="back" onclick="backToAthlete()" style="margin:0">← Torna all'Atleta</button>
+<div style="display:flex;gap:8px">
+<button class="primary" onclick="editSession(currentDetailId)">Modifica</button>
+<button class="danger" onclick="deleteSession(currentDetailId)">Elimina</button>
+</div>
+</div>
+</section>
+</main>
+
+<script>
+const DB_NAME='MAGem_Registro_Tecnico_STORICO',DB_VERSION=1;
+let db=null,currentAthlete='Miriam',editId=null,currentDetailId=null;
+const athletes={
+Miriam:{
+ id:'miriam',name:'Miriam',
+ state:'Aggiornamento 29/09/2026: la maggiore rotazione della spalla della corda è associata a una discreta riduzione della curvatura del polso e a un rilascio apparentemente più morbido. L’effetto sulla rosata è risultato variabile nella stessa sessione e richiede ulteriore verifica.',
+ themes:'Scapola–spalla–braccio; transizione holding–espansione; ripetibilità. Verificare gli effetti della maggiore rotazione della spalla della corda e la continuità della trazione.',
+ history:'Miriam è descritta come giovane atleta con esperienza nella danza, buona capacità di modificare il gesto e buona sensibilità corporea. La preferenza possibile per immagini, sensazioni e imitazione è una valutazione didattica, non una classificazione definitiva.\\n\\nIl fenomeno storico principale è il «balletto» della struttura scapolare/anteriorе, spesso osservato già all’ancoraggio, associato a una protrazione molto marcata della scapola del lato dell’arco. Il fenomeno non è costante.\\n\\nSono state considerate due spiegazioni alternative: organizzazione/protrazione anteriore molto marcata rispetto alla capacità posteriore di sostenerla, oppure protrazione come compensazione di una difficoltà posteriore. È stata inoltre formulata l’ipotesi di un «affossamento» della scapola, anche in relazione alla precedente consegna «abbassa la spalla». Nessuna di queste relazioni causali è dimostrata.\\n\\nUn’altra linea di lavoro riguarda la ripetibilità del processo: il gesto può riuscire senza essere necessariamente prodotto ogni volta dallo stesso processo motorio.',
+ evidence:'Filmati 1000051359 e 1000051316: Miriam mantiene per un tempo relativamente lungo una configurazione di holding apparentemente stabile; non emerge un’incapacità generale di mantenere l’ancoraggio.\\n\\nNella transizione holding → prosecuzione compaiono piccoli aggiustamenti di braccio-spalla e, in un filmato, piccoli movimenti della testa. La vista dorsale disponibile non consente una valutazione affidabile della dinamica scapolare/dorsale.\\n\\nIpotesi di lavoro più recente: holding → attenuazione/interruzione della trazione → ripresa della trazione → difficoltà di riorganizzazione → maggiore ricorso apparente a braccio/spalla/collo → micro-aggiustamenti → rilascio. Il video non mostra direttamente attivazione o rilassamento muscolare: questa parte resta un’ipotesi fisiologico-meccanica.\\n\\nOsservazione operativa 29/09/2026: nel corso della sessione Miriam talvolta dimentica una delle consegne o una particolare azione prevista, per esempio il clicker o una specifica azione del gesto. L’osservazione viene registrata senza attribuirle per ora una causa.'
+},
+Erica:{
+ id:'erica',name:'Erica',
+ state:'Stato storico: la chiusura di gomito/braccio è risultata ridotta nelle prove documentate ma non eliminata; la pronazione non è stabilmente eliminata. Le relazioni con busto, propriocezione, forza, resistenza e controllo motorio restano questioni da verificare.',
+ themes:'Scapola–spalla–braccio; busto; pronazione; continuità fino al rilascio. Una variabile principale per esperimento; non sovraccaricare di consegne.',
+ history:'Il fenomeno storico seguito è una possibile perdita/cedimento dell’organizzazione del lato dell’arco nella fase immediatamente precedente o contestuale al rilascio, descritta operativamente come «chiusurina» o possibile microcollasso. L’area di interesse è il complesso scapola–spalla–braccio dell’arco.\\n\\nIl lavoro ha riguardato la capacità di mantenere l’organizzazione sotto carico e la continuità del gesto fino al follow-through. Sono state studiate anche condizioni senza clicker/blank bale.\\n\\nÈ stata inoltre studiata la pronazione dell’avambraccio e la sua possibile relazione temporale con l’assetto del braccio/spalla. Il rapporto causale non è considerato acquisito.',
+ evidence:'Questioni ancora aperte: chiusura di gomito/braccio ridotta nelle prove documentate ma non eliminata; pronazione non stabilmente eliminata; retrotorsione del busto durante il caricamento come ipotesi da verificare; propriocezione, forza specifica, resistenza posturale, controllo motorio e stabilizzazione sotto carico come ipotesi, non cause dimostrate; possibile variabilità attentiva come ipotesi non verificata e da non trasformare in spiegazione motivazionale o clinica.'
+}}
+const miriam=[
+['Storico','Abbassa la spalla','Organizzare/abbassare la spalla dell’arco.','Successivamente considerata la possibilità di un’interpretazione troppo profonda («affossamento»); ipotesi da verificare.'],
+['Storico','Riduzione controllata della protrazione','Ridurre leggermente la protrazione mantenendo gli altri riferimenti.','Esperimento proposto; previsione di ridurre balletto/instabilità; non conclusivo.'],
+['Storico','Spingi lo sterno verso il paglione','Favorire organizzazione globale invece di correzione segmentaria.','Consegna proposta.'],
+['Storico','Poche consegne + molta ripetizione','Ridurre carico informativo e favorire stabilizzazione.','Strategia didattica proposta.'],
+['Storico','Immagini / sensazioni','Utilizzare riferimenti percettivi globali.','Strategia didattica proposta.'],
+['01/09/2026','Ancoraggio → holding → ~1 s espansione → rilascio; mano della corda lungo il collo.','Migliorare espansione e backtension.','Inizio buono; con aumento delle frecce compaiono stanchezza/disattenzione; dopo l’ancoraggio appare un blocco e un piccolo «ballettino».'],
+['01/09/2026','Verifica del piccolo cuneo della patella.','Ridurre la piega del polso della corda.','Ipotesi/proposta; risultato non documentato come verificato.'],
+['01/09/2026','Lavoro fisico 10–15 min; contatti anche con elastico; holding 10 s; 4–5 volte/settimana.','Sviluppare capacità di mantenimento/organizzazione.','Proposta di lavoro, non risultato verificato.'],
+['Recente','Holding brevissima → prosecuzione della trazione-spinta → rilascio.','Verificare se diminuiscono micro-aggiustamenti, balletto e movimenti della testa.','Decisione operativa; da verificare su più frecce e sessioni.'],
+['Recente','Trazione lineare come sempre; mirino «galleggia» intorno al giallo; ai contatti non fermarsi; passaggio graduale lineare → angolare fino al click; follow-through.','Evitare che la mira trasformi la fase terminale in un arresto e verificare la continuità.','Consegna sperimentale recente; esito da verificare.'],
+['29/09/2026','Prosecuzione della consegna precedente con leggera maggiore rotazione della spalla della corda, per ridurre l’angolo del braccio della corda rispetto alla linea della freccia. Intervento propriocettivo per ridurre l’azione percepita del bicipite della corda e aumentare quella della muscolatura dorsale nell’ultima fase della trazione.','Ridurre la curvatura del polso della corda e favorire un rilascio più morbido.','Discreta riduzione della curvatura del polso e conseguente maggiore morbidezza del rilascio. Inizialmente discreta concentrazione della rosata, seguita da un parziale allargamento dopo l’introduzione della modifica dell’angolo del braccio. Effetto complessivo da verificare.']
+];
+const erica=[
+['Storico','Senza clicker / blank bale','Ridurre il vincolo attentivo del clicker e lavorare sulla continuità dell’espansione.','Risultati non conclusivi; condizione di lavoro/indagine.'],
+['Storico','Guida manuale','Verificare se l’organizzazione poteva essere ottenuta con assistenza.','Miglioramento osservato come supporto all’ipotesi, non prova causale.'],
+['Storico','Flettenti circa 4 lb più leggeri','Discriminare un possibile contributo della forza.','Prova documentata, non conclusiva.'],
+['Storico','Spingi la scapola','Consegna segmentaria per organizzare il lato dell’arco.','Successivamente riconsiderata come possibile strategia troppo locale.'],
+['Storico','Spingi avanti lo sterno','Favorire un’organizzazione globale.','In una prova struttura descritta come molto stabile («marmorea»); meccanismo non dimostrato.'],
+['01/09/2026','Peso più sul piede anteriore («palloncino») + bilanciamento trazione/spinta + «non pronare il gomito dell’arco».','Ridurre chiusura e stabilizzare il lato dell’arco.','Esito in parte favorevole: chiusura riferita come un po’ ridotta; pronazione ancora intermittente; con più frecce diminuisce la capacità di seguire la consegna.'],
+['04/09/2026','Open stance + «palloncino» / «spingi avanti lo sterno».','Ridurre retrotorsione del busto e chiusura di gomito/braccio.','Qualità altalenante; open stance tende a diventare square stance; retrotorsione e pronazione ricompaiono.'],
+['Recente','Mantenere la posizione dei piedi stabilita per tutto il tiro.','Isolare la posizione dei piedi come variabile sperimentale.','Intervento recente; esito da verificare.'],
+['Recente','«Palloncino» come immagine globale di fondo.','Mantenere il bilanciamento trazione/spinta senza aggiungere troppe istruzioni.','Riferimento operativo mantenuto.']
+];
+
+function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains('athletes'))d.createObjectStore('athletes',{keyPath:'id'});if(!d.objectStoreNames.contains('sessions')){const s=d.createObjectStore('sessions',{keyPath:'id',autoIncrement:true});s.createIndex('athlete','athlete');s.createIndex('date','date')}};r.onsuccess=e=>{db=e.target.result;resolve(db)};r.onerror=()=>reject(r.error)})}
+function store(n,m='readonly'){return db.transaction(n,m).objectStore(n)}
+function req(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
+const get=(n,k)=>req(store(n).get(k)),all=n=>req(store(n).getAll()),put=(n,x)=>req(store(n,'readwrite').put(x)),del=(n,k)=>req(store(n,'readwrite').delete(k));
+
+async function seed(){
+ const existing=await all('athletes');
+ if(existing.length)return;
+ for(const k of ['Miriam','Erica'])await put('athletes',athletes[k]);
+ for(const [name,rows] of [['Miriam',miriam],['Erica',erica]]){
+  for(const r of rows){
+   await put('sessions',{athlete:name,date:r[0],theme:r[1],context:'Dato riportato nel registro storico sperimentale.',intervention:r[1],objective:r[2],observation:r[3],interpretation:'',hypothesis:'',outcome:r[3],verify:r[0]==='Storico'?'Contesto storico; verificare solo se ripreso in una nuova sessione.':r[3].toLowerCase().includes('verific')?r[3]:'',videos:''});
+  }
+ }
+}
+async function init(){try{await openDB();await seed();await renderAthletes();document.getElementById('dbStatus').textContent='Archivio IndexedDB pronto: storico caricato.'}catch(e){document.getElementById('dbStatus').textContent='ERRORE IndexedDB: '+e.message}}
+function show(id){document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');if(id==='athletes')renderAthletes()}
+async function renderAthletes(){
+ const list=await all('athletes');
+ list.sort((a,b)=>a.name.localeCompare(b.name,'it'));
+ document.getElementById('athleteCards').innerHTML=list.length?list.map(a=>
+   `<div class="card" onclick="openAthlete('${escAttr(a.name)}')"><div class="meta">ATLETA</div><h3>${esc(a.name)}</h3><div>Stato · storia · sessioni</div></div>`
+ ).join(''):'<div class="status">Nessun atleta presente.</div>';
+}
+async function manageAthletes(){
+ await renderAthleteManagement();
+ show('manageAthletes');
+}
+async function renderAthleteManagement(){
+ const list=(await all('athletes')).sort((a,b)=>a.name.localeCompare(b.name,'it'));
+ document.getElementById('athleteManagementList').innerHTML=list.length?
+   `<table><thead><tr><th>Atleta</th><th>Azioni</th></tr></thead><tbody>${
+   list.map(a=>`<tr><td><strong>${esc(a.name)}</strong></td><td>
+   <button onclick="openAthlete('${escAttr(a.name)}')">Apri</button>
+   <button class="danger" onclick="deleteAthlete('${escAttr(a.name)}')">Elimina</button>
+   </td></tr>`).join('')
+   }</tbody></table>`:
+   '<div class="status">Nessun atleta presente.</div>';
+}
+async function addAthlete(){
+ const input=document.getElementById('newAthleteName');
+ const name=input.value.trim().replace(/\s+/g,' ');
+ if(!name){alert('Inserisci il nome dell’atleta.');return}
+ const id=name.toLowerCase();
+ const existing=await get('athletes',id);
+ if(existing){alert('Esiste già un atleta con questo nome.');return}
+ await put('athletes',{
+   id,name,
+   state:'Stato tecnico da costruire a partire dalle sessioni.',
+   themes:'Nessun tema ancora registrato.',
+   history:'',
+   evidence:''
+ });
+ input.value='';
+ await renderAthleteManagement();
+ await renderAthletes();
+}
+async function deleteAthlete(name){
+ const a=await get('athletes',name.toLowerCase());
+ if(!a)return;
+ const sessions=(await all('sessions')).filter(s=>s.athlete===name);
+ const msg=sessions.length
+   ? `Eliminare ${name}?\\n\\nQuesto atleta ha ${sessions.length} sessioni/interventi registrati. Verranno eliminati anche questi dati.\\n\\nQuesta operazione non è annullabile.`
+   : `Eliminare ${name}?\\n\\nQuesta operazione non è annullabile.`;
+ if(!confirm(msg))return;
+ for(const s of sessions) await del('sessions',s.id);
+ await del('athletes',a.id);
+ if(currentAthlete===name) currentAthlete='Miriam';
+ await renderAthletes();
+ await renderAthleteManagement();
+ show('manageAthletes');
+}
+async function openAthlete(name){currentAthlete=name;const a=await get('athletes',name.toLowerCase());document.getElementById('athleteName').textContent=name;document.getElementById('state').textContent=a.state;document.getElementById('themes').textContent=a.themes;document.getElementById('history').textContent=a.history;document.getElementById('evidence').textContent=a.evidence;document.getElementById('sessionSearch').value='';await renderSessions();show('athlete')}
+async function renderSessions(){const q=(document.getElementById('sessionSearch')?.value||'').toLowerCase();let s=(await all('sessions')).filter(x=>x.athlete===currentAthlete&&(!q||Object.values(x).some(v=>String(v).toLowerCase().includes(q))));s.sort((a,b)=>String(b.date).localeCompare(String(a.date)));document.getElementById('sessionList').innerHTML=s.length?'<table><thead><tr><th>Periodo</th><th>Intervento</th><th>Esito / stato</th></tr></thead><tbody>'+s.map(x=>`<tr onclick="openDetail(${x.id})" style="cursor:pointer"><td>${esc(x.date)}</td><td>${esc(x.theme)}</td><td>${esc(x.outcome)}</td></tr>`).join('')+'</tbody></table>':'<div style="color:#68717a">Nessuna sessione registrata.</div>'}
+function clearForm(){['fTheme','fContext','fIntervention','fObjective','fObservation','fInterpretation','fHypothesis','fOutcome','fVerify','fVideos'].forEach(id=>document.getElementById(id).value='')}
+function newSession(){stopVoice();editId=null;clearForm();fAthlete.value=currentAthlete;fDate.value=new Date().toISOString().slice(0,10);formTitle.textContent='Nuova sessione';setVoiceStatus('Pronuncia il nome del campo, per esempio: «Osservazione: ...»');show('session')}
+async function saveSession(){const x={id:editId||undefined,athlete:fAthlete.value,date:fDate.value,theme:fTheme.value.trim(),context:fContext.value,intervention:fIntervention.value,objective:fObjective.value,observation:fObservation.value,interpretation:fInterpretation.value,hypothesis:fHypothesis.value,outcome:fOutcome.value,verify:fVerify.value,videos:fVideos.value};if(!x.theme){alert('Inserisci almeno il tema principale.');return}await put('sessions',x);currentAthlete=x.athlete;await openAthlete(currentAthlete)}
+const labels={context:'Contesto / condizioni',intervention:'Intervento',objective:'Obiettivo',observation:'Osservazioni',interpretation:'Interpretazioni',hypothesis:'Ipotesi',outcome:'Esito / stato',verify:'Da verificare',videos:'Filmati / materiali'};
+async function openDetail(id){const x=await get('sessions',id);if(!x)return;currentDetailId=id;detailTitle.textContent=x.date+' — '+x.theme;detailBody.innerHTML=['context','intervention','objective','observation','interpretation','hypothesis','outcome','verify','videos'].map(k=>`<div class="section"><div class="label">${labels[k]}</div><div class="state">${esc(x[k]||'—')}</div></div>`).join('');show('detail')}
+async function editSession(id){const x=await get('sessions',id);editId=id;fAthlete.value=x.athlete;fDate.value=x.date;fTheme.value=x.theme;fContext.value=x.context||'';fIntervention.value=x.intervention||'';fObjective.value=x.objective||'';fObservation.value=x.observation||'';fInterpretation.value=x.interpretation||'';fHypothesis.value=x.hypothesis||'';fOutcome.value=x.outcome||'';fVerify.value=x.verify||'';fVideos.value=x.videos||'';formTitle.textContent='Modifica sessione';setVoiceStatus('Pronuncia il nome del campo, per esempio: «Osservazione: ...»');show('session')}
+async function deleteSession(id){if(!confirm('Eliminare questa sessione?'))return;await del('sessions',id);await openAthlete(currentAthlete)}
+function backToAthlete(){stopVoice();openAthlete(currentAthlete)}
+
+// --- Input vocale V0.9.1: voce -> comando campo -> testo. Nessuna AI. ---
+let voiceRecognition=null;
+let voiceListening=false;
+const voiceFields={
+  'contesto':'fContext','contesti':'fContext','condizioni':'fContext',
+  'intervento':'fIntervention','interventi':'fIntervention',
+  'obiettivo':'fObjective','obiettivi':'fObjective',
+  'osservazione':'fObservation','osservazioni':'fObservation',
+  'interpretazione':'fInterpretation','interpretazioni':'fInterpretation',
+  'ipotesi':'fHypothesis',
+  'esito':'fOutcome','stato':'fOutcome','esito stato':'fOutcome',
+  'da verificare':'fVerify','verifica':'fVerify',
+  'filmati':'fVideos','materiali':'fVideos','filmati materiali':'fVideos'
+};
+function setVoiceStatus(t){const e=document.getElementById('voiceStatus');if(e)e.textContent=t}
+function parseVoiceCommand(text){
+  let t=String(text||'').trim();
+  const low=t.toLowerCase().replace(/[.?!]+$/,'').trim();
+  const keys=Object.keys(voiceFields).sort((a,b)=>b.length-a.length);
+  for(const k of keys){
+    const re=new RegExp('^'+k.replace(/\s+/g,'\\s+')+'(?:\\s*[:;,]\\s*|\\s+)','i');
+    if(re.test(low)){
+      const rest=t.replace(re,'').trim();
+      return {field:voiceFields[k],key:k,text:rest};
+    }
+  }
+  return null;
+}
+function toggleVoice(){voiceListening?stopVoice():startVoice()}
+function startVoice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){setVoiceStatus('Riconoscimento vocale non disponibile in questo browser.');return}
+  if(!voiceRecognition){
+    voiceRecognition=new SR();
+    voiceRecognition.lang='it-IT';
+    voiceRecognition.continuous=false;
+    voiceRecognition.interimResults=false;
+    voiceRecognition.maxAlternatives=1;
+    voiceRecognition.onstart=()=>{voiceListening=true;document.getElementById('voiceButton').textContent='⏹️ Ferma';setVoiceStatus('Ascolto… pronuncia campo e contenuto.')};
+    voiceRecognition.onresult=e=>{
+      const text=e.results?.[0]?.[0]?.transcript||'';
+      const parsed=parseVoiceCommand(text);
+      if(parsed && parsed.text){
+        const el=document.getElementById(parsed.field);
+        el.value=el.value?el.value+'\n'+parsed.text:parsed.text;
+        el.focus();
+        setVoiceStatus('Inserito in «'+parsed.key+'»: '+parsed.text);
+      }else if(parsed && !parsed.text){
+        setVoiceStatus('Ho riconosciuto «'+parsed.key+'», ma manca il contenuto.');
+      }else{
+        setVoiceStatus('Non ho riconosciuto il campo. Prova: «Osservazione: …» oppure «Ipotesi: …».');
+      }
+    };
+    voiceRecognition.onerror=e=>{setVoiceStatus('Voce: '+(e.error==='not-allowed'?'microfono non autorizzato':e.error));voiceListening=false;document.getElementById('voiceButton').textContent='🎙️ Parla'};
+    voiceRecognition.onend=()=>{voiceListening=false;document.getElementById('voiceButton').textContent='🎙️ Parla'};
+  }
+  try{voiceRecognition.start()}catch(e){}
+}
+function stopVoice(){if(voiceRecognition&&voiceListening){try{voiceRecognition.stop()}catch(e){} } voiceListening=false;const b=document.getElementById('voiceButton');if(b)b.textContent='🎙️ Parla'}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escAttr(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+async function exportDB(){const b={format:'MAGem Registro Tecnico',version:2,exportedAt:new Date().toISOString(),athletes:await all('athletes'),sessions:await all('sessions')};const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(b,null,2)],{type:'application/json'}));a.download='MAGem_Registro_Backup_'+new Date().toISOString().slice(0,10)+'.json';a.click()}
+async function importDB(e){const f=e.target.files[0];if(!f)return;try{const b=JSON.parse(await f.text());if(!Array.isArray(b.athletes)||!Array.isArray(b.sessions))throw Error('Backup non riconosciuto');if(!confirm('Importare il backup?'))return;for(const a of b.athletes)await put('athletes',a);for(const s of b.sessions)await put('sessions',s);alert('Backup importato.');await openAthlete(currentAthlete)}catch(x){alert('Errore importazione: '+x.message)}e.target.value=''}
+init();
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body></html>
